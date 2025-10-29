@@ -1,0 +1,1172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive Drug Reference</title>
+    <!-- Load Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Lucide Icons script will be moved to the end of <body> -->
+    <style>
+        /* Custom styling for scrollbar in filter */
+        .scrollbar-hide::-webkit-scrollbar { display: none; }
+        .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+        
+        /* Custom animation for messages */
+        @keyframes fadeInOut {
+            0% { opacity: 0; }
+            10% { opacity: 1; }
+            90% { opacity: 1; }
+            100% { opacity: 0; }
+        }
+        .animate-fadeInOut { animation: fadeInOut 5s ease-in-out forwards; }
+        
+        /* Ensure modals are on top */
+        .modal-backdrop {
+            z-index: 50;
+        }
+        .modal-content {
+            z-index: 51;
+        }
+        .message-toast {
+            z-index: 60;
+        }
+        .floating-button {
+            z-index: 40;
+        }
+    </style>
+</head>
+<body class="bg-gray-50 p-4 sm:p-8 font-sans">
+
+    <div class="max-w-5xl mx-auto">
+        <!-- Header -->
+        <header class="mb-8">
+            <h1 class="text-3xl sm:text-4xl font-extrabold text-gray-900 flex items-center">
+                <i data-lucide="flask-conical" class="w-8 h-8 mr-3 text-blue-600"></i>
+                Interactive GIT Drug Reference (Local Data)
+            </h1>
+            <p class="mt-2 text-lg text-gray-500">
+                Searchable reference with local data persistence, CSV export, and **Gemini Safety Analysis**. Total Drugs: <span id="drug-count">0</span>
+            </p>
+        </header>
+
+        <!-- Control Panel (Search and Import/Export) -->
+        <div class="mb-6 space-y-4">
+            <!-- Search Bar -->
+            <div class="shadow-xl rounded-xl bg-white p-4">
+                <div class="relative">
+                    <i data-lucide="search" class="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400"></i>
+                    <input
+                        type="text"
+                        id="search-term"
+                        placeholder="Search by name, code, or instruction..."
+                        class="w-full py-3 pl-10 pr-10 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition"
+                    />
+                    <button
+                        id="clear-search-btn"
+                        class="absolute right-3 top-1/2 transform -translate-y-1/2 p-1 text-gray-500 hover:text-gray-800 rounded-full hidden"
+                        aria-label="Clear search"
+                    >
+                        <i data-lucide="x" class="w-4 h-4"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Export/OCR Buttons -->
+            <div class="flex flex-wrap gap-3 justify-center sm:justify-start">
+                <!-- MODIFIED: Changed ID and text for Export All -->
+                <button
+                    id="export-all-btn"
+                    class="flex items-center px-4 py-2 bg-green-600 text-white font-semibold rounded-lg shadow-md hover:bg-green-700 transition"
+                >
+                    <i data-lucide="download" class="w-4 h-4 mr-2"></i> Export All (CSV)
+                </button>
+                
+                <!-- NEW: Export Selected Button -->
+                <button
+                    id="export-selected-btn"
+                    class="flex items-center px-4 py-2 bg-blue-600 text-white font-semibold rounded-lg shadow-md hover:bg-blue-700 transition hidden"
+                >
+                    <i data-lucide="download-cloud" class="w-4 h-4 mr-2"></i> Export Selected (<span id="selected-count">0</span>)
+                </button>
+
+                <!-- OCR Scan Button -->
+                <label id="ocr-label" class="flex items-center px-4 py-2 text-white font-semibold rounded-lg shadow-md transition cursor-pointer bg-orange-500 hover:bg-orange-600">
+                    <span id="ocr-label-content">
+                        <i data-lucide="scan" class="w-4 h-4 mr-2 inline-block"></i> OCR Scan New Page
+                    </span>
+                    <span id="ocr-loading-content" class="hidden">
+                        <i data-lucide="loader" class="w-4 h-4 mr-2 animate-spin inline-block"></i> Analyzing Image...
+                    </span>
+                    <input
+                        type="file"
+                        id="ocr-upload"
+                        accept="image/*"
+                        class="hidden"
+                    />
+                </label>
+            </div>
+        </div>
+
+        <!-- Category Filters -->
+        <div id="category-filters" class="mb-8 overflow-x-auto whitespace-nowrap pb-2 scrollbar-hide">
+            <div class="flex space-x-3">
+                <!-- Category buttons will be injected here by JS -->
+            </div>
+        </div>
+
+        <!-- Drug List Table -->
+        <div class="bg-white rounded-xl shadow-xl overflow-hidden">
+            <div class="overflow-x-auto">
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <!-- NEW: Select All Checkbox Header -->
+                            <th class="p-4 w-12">
+                                <input type="checkbox" id="select-all-checkbox" class="rounded border-gray-300 text-blue-600 focus:ring-blue-500" title="Select all visible" />
+                            </th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-1/6">Code</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-3/6">Generic Name</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-2/6">Form</th>
+                        </tr>
+                    </thead>
+                    <tbody id="drug-table-body" class="bg-white divide-y divide-gray-100">
+                        <!-- Drug rows will be injected here by JS -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Floating Add Button -->
+    <button
+        id="add-new-drug-btn"
+        class="fixed bottom-6 right-6 p-4 bg-blue-600 text-white rounded-full shadow-lg hover:bg-blue-700 transition duration-300 transform hover:scale-105 floating-button"
+        title="Add New Drug"
+    >
+        <i data-lucide="plus" class="w-6 h-6"></i>
+    </button>
+
+    <!-- Modals Container -->
+    <div id="modal-container">
+        <!-- Modal templates commented out for brevity, but are used by JS -->
+    </div>
+
+    <!-- User Feedback Message Toast -->
+    <div id="message-toast" class="message-toast fixed bottom-4 right-4 bg-gray-800 text-white p-3 rounded-lg shadow-xl transition-opacity duration-300 opacity-0 hidden">
+    </div>
+
+    <!-- Load Lucide Icons just before our main script -->
+    <script src="https://cdn.jsdelivr.net/npm/lucide-static@latest/dist/lucide.min.js"></script>
+
+    <script>
+        // --- DOM Elements ---
+        const dom = {
+            drugCount: document.getElementById('drug-count'),
+            searchTermInput: document.getElementById('search-term'),
+            clearSearchBtn: document.getElementById('clear-search-btn'),
+            // MODIFIED: Renamed export button
+            exportAllBtn: document.getElementById('export-all-btn'),
+            // NEW: Added elements for multi-select
+            exportSelectedBtn: document.getElementById('export-selected-btn'),
+            selectedCount: document.getElementById('selected-count'),
+            selectAllCheckbox: document.getElementById('select-all-checkbox'),
+            ocrLabel: document.getElementById('ocr-label'),
+            ocrLabelContent: document.getElementById('ocr-label-content'),
+            ocrLoadingContent: document.getElementById('ocr-loading-content'),
+            ocrUploadInput: document.getElementById('ocr-upload'),
+            categoryFilters: document.getElementById('category-filters').querySelector('div'),
+            drugTableBody: document.getElementById('drug-table-body'),
+            addNewDrugBtn: document.getElementById('add-new-drug-btn'),
+            modalContainer: document.getElementById('modal-container'),
+            messageToast: document.getElementById('message-toast'),
+        };
+
+        // --- GLOBAL STATE & CONSTANTS ---
+        const LOCAL_STORAGE_KEY = 'gitDrugReferenceDataV2';
+        
+        const apikey = "AIzaSyDnEXbl4H664dLyY6SXlRH4IFwHX0EdVew"; 
+        const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apikey}`;
+
+        const INITIAL_DRUGS = [
+          { code: '01.01.01', name: 'Aluminium/Magnesium Hydroxide', form: 'Tablets', remarks: 'Also used in some vaccines. Used to control phosphate in kidney failure.', category: 'Antacid' },
+          { code: '01.01.02', name: 'Aluminium/Magnesium Hydroxide', form: 'Suspension', remarks: '180ml/bottle. Used to control phosphate in kidney failure.', category: 'Antacid' },
+          { code: '01.02.01', name: 'Hyoscine Butylbromide', form: 'Tablets', remarks: '10mg/tab. Prevents cramps & Blurred vision. Peripheral anticholinergic.', category: 'Antispasmodic' },
+          { code: '01.02.02', name: 'Hyoscine Butylbromide', form: 'Suppository', remarks: '10mg/supp', category: 'Antispasmodic' },
+          { code: '01.02.04', name: 'Mebeverine Hcl', form: 'Tablets', remarks: '135-200mg. Take 20 min before meals. GIT spasms.', category: 'Antispasmodic' },
+          { code: '01.03.01', name: 'Cisapride', form: 'Tablets', remarks: '10mg/tab. Long QT Syndrome Risk (Withdraw). 5HT4 agonist.', category: 'Motility Stimulant' },
+          { code: '01.03.02', name: 'Cisapride', form: 'Suspension', remarks: '5mg/5ml bottle', category: 'Motility Stimulant' },
+          { code: '01.04.02', name: 'Ranitidine, Famotidine, or Nizatidine (H2 Antagonist)', form: 'Tablets', remarks: '150mg/20mg/150mg/tab. Inhibits stomach acid production & secretion.', category: 'Ulcer Healing' },
+          { code: '01.04.05', name: 'Sucralfate (Chelate)', form: 'Tablets', remarks: '1g/tab. GIVE 1HR BEFORE MEALS. Bed Time meal.', category: 'Ulcer Healing' },
+          { code: '01.04.06', name: 'Omeprazole or Lansoprazole (PPI)', form: 'Capsule', remarks: '20mg or 30mg/cap. Give before meals.', category: 'Ulcer Healing' },
+          { code: '01.04.07', name: 'Omeprazole/Pantoprazole Sodium (PPI)', form: 'Injection', remarks: '40mg vial. Reglinpine/Nateglinide 120mg/tab.', category: 'Ulcer Healing' },
+        ];
+
+        let state = {
+            drugs: [],
+            categories: [],
+            searchTerm: '',
+            selectedCategory: 'All',
+            selectedDrugCode: null,
+            isFormOpen: false,
+            currentEditDrug: null,
+            isOCRLoading: false,
+            confirmDeleteCode: null,
+            analysisDrug: null,
+            patientHandoutDrug: null,
+            selectedDrugs: [], // NEW: Store selected drug codes
+            messageTimer: null
+        };
+
+        function loadState() {
+            const savedData = localStorage.getItem(LOCAL_STORAGE_KEY);
+            if (savedData) {
+                try {
+                    const parsedData = JSON.parse(savedData);
+                    if (Array.isArray(parsedData) && parsedData.length > 0) {
+                        state.drugs = parsedData;
+                    } else {
+                        state.drugs = [...INITIAL_DRUGS];
+                    }
+                } catch (e) {
+                    console.error("Failed to parse saved data, resetting.", e);
+                    state.drugs = [...INITIAL_DRUGS];
+                }
+            } else {
+                state.drugs = [...INITIAL_DRUGS];
+            }
+            updateCategories();
+        }
+
+        function saveState() {
+            localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(state.drugs));
+            updateCategories(); 
+            fullRender(); 
+        }
+ 
+        function updateCategories() {
+             state.categories = ['All', ...new Set(state.drugs.map(d => d.category))];
+        }
+
+        // --- RENDERING FUNCTIONS ---
+        
+        function fullRender() {
+            renderTable();
+            renderCategories();
+            dom.drugCount.textContent = state.drugs.length;
+            
+            dom.modalContainer.innerHTML = '';
+            
+            if (state.isFormOpen) {
+                renderDrugForm(state.currentEditDrug);
+            } else if (state.analysisDrug) {
+                renderAnalysisModal(state.analysisDrug);
+            } else if (state.patientHandoutDrug) {
+                renderPatientHandoutModal(state.patientHandoutDrug);
+            } else if (state.selectedDrugCode) {
+                renderSelectedDrugModal(findDrug(state.selectedDrugCode));
+            }
+        }
+        
+        function renderCategories() {
+            dom.categoryFilters.innerHTML = '';
+            state.categories.forEach(category => {
+                const isActive = category === state.selectedCategory;
+                const button = document.createElement('button');
+                button.textContent = category;
+                button.className = `
+                    px-4 py-2 text-sm font-medium transition-all duration-200 rounded-full shadow-md
+                    ${isActive
+                        ? 'bg-blue-600 text-white shadow-blue-400/50 scale-105'
+                        : 'bg-white text-gray-700 hover:bg-gray-100'
+                    }
+                `;
+                button.onclick = () => {
+                    state.selectedCategory = category;
+                    state.selectedDrugCode = null;
+                    state.confirmDeleteCode = null;
+                    state.analysisDrug = null;
+                    state.patientHandoutDrug = null;
+                    fullRender();
+                };
+                dom.categoryFilters.appendChild(button);
+            });
+        }
+
+        function renderTable() {
+            dom.drugTableBody.innerHTML = '';
+            const filteredDrugs = getFilteredDrugs();
+            let allVisibleSelected = filteredDrugs.length > 0;
+            
+            if (filteredDrugs.length > 0) {
+                filteredDrugs.forEach(drug => {
+                    // NEW: Check selection state
+                    const isSelected = state.selectedDrugs.includes(drug.code);
+                    if (!isSelected) {
+                        allVisibleSelected = false;
+                    }
+
+                    const tr = document.createElement('tr');
+                    tr.className = `
+                        transition-all duration-150 hover:bg-blue-50
+                        ${state.selectedDrugCode === drug.code ? 'bg-blue-100 shadow-inner' : ''}
+                        ${isSelected ? 'bg-blue-50' : ''} 
+                    `;
+                    
+                    // NEW: Added checkbox cell
+                    tr.innerHTML = `
+                        <td class="p-4 w-12">
+                            <input type="checkbox" data-code="${drug.code}" class="select-row-checkbox rounded border-gray-300 text-blue-600 focus:ring-blue-500" ${isSelected ? 'checked' : ''} />
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-900">${drug.code}</td>
+                        <td class="px-6 py-4 text-sm font-semibold text-gray-800">${drug.name}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${drug.form}</td>
+                    `;
+                    
+                    // MODIFIED: Row click handler
+                    tr.onclick = (e) => {
+                        // If the click was on the checkbox, let the checkbox handler do the work
+                        if (e.target.type === 'checkbox') return;
+                        // Otherwise, trigger the detail modal
+                        handleDrugSelect(drug);
+                    };
+                    
+                    // NEW: Add change listener to checkbox
+                    tr.querySelector('.select-row-checkbox').onchange = (e) => {
+                        handleSelectRow(e.target.checked, drug.code);
+                    };
+
+                    dom.drugTableBody.appendChild(tr);
+                });
+            } else {
+                allVisibleSelected = false;
+                dom.drugTableBody.innerHTML = `
+                    <tr>
+                        <td colspan="4" class="text-center py-8 text-gray-500 text-base">
+                            No drugs found matching your criteria.
+                        </td>
+                    </tr>
+                `;
+            }
+
+            // NEW: Update "Select All" checkbox state
+            dom.selectAllCheckbox.checked = allVisibleSelected;
+            
+            // NEW: Update "Export Selected" button visibility and count
+            if (state.selectedDrugs.length > 0) {
+                dom.exportSelectedBtn.classList.remove('hidden');
+                dom.selectedCount.textContent = state.selectedDrugs.length;
+            } else {
+                dom.exportSelectedBtn.classList.add('hidden');
+            }
+        }
+        
+        function renderSelectedDrugModal(drug) {
+            if (!drug) {
+                dom.modalContainer.innerHTML = '';
+                return;
+            }
+            const modalHTML = `
+                <div id="selected-drug-modal" class="modal-backdrop fixed inset-0 bg-gray-900 bg-opacity-70 flex items-center justify-center p-4 transition-opacity duration-300">
+                    <div class="modal-content bg-blue-700 text-white p-6 rounded-xl shadow-2xl w-full max-w-xl transition-transform duration-300 transform scale-100">
+                        <div class="flex items-center justify-between mb-3">
+                            <h3 class="text-xl font-bold flex items-center">
+                                <i data-lucide="info" class="w-5 h-5 mr-2"></i>
+                                Details for <span id="selected-drug-name">${drug.name}</span>
+                            </h3>
+                            <div class="flex flex-wrap gap-2 items-center justify-end">
+                                <button id="analyze-safety-btn" class="flex items-center px-3 py-1 bg-yellow-500 text-blue-900 font-semibold rounded-lg shadow-md hover:bg-yellow-400 transition text-sm" title="Analyze Drug Safety">
+                                    <i data-lucide="alert-triangle" class="w-4 h-4 mr-1"></i> Analyze Safety
+                                </button>
+                                <button id="patient-handout-btn" class="flex items-center px-3 py-1 bg-teal-500 text-white font-semibold rounded-lg shadow-md hover:bg-teal-600 transition text-sm" title="Patient Handout">
+                                    <i data-lucide="clipboard-list" class="w-4 h-4 mr-1"></i> ✨ Patient Handout
+                                </button>
+                                
+                                <div id="delete-confirm-container" class="${state.confirmDeleteCode === drug.code ? 'flex space-x-2 items-center' : 'hidden'}">
+                                     <span class="text-red-200 text-sm font-medium">Confirm Delete?</span>
+                                    <button id="delete-confirm-yes" class="px-3 py-1 rounded-lg bg-red-600 text-white hover:bg-red-700 transition text-sm font-medium" aria-label="Confirm delete" title="Confirm Delete">
+                                        Yes
+                                    </button>
+                                    <button id="delete-confirm-cancel" class="px-3 py-1 rounded-lg text-blue-200 hover:bg-blue-600 transition text-sm font-medium" aria-label="Cancel delete" title="Cancel Delete">
+                                        Cancel
+                                    </button>
+                                </div>
+
+                                <div id="delete-edit-container" class="${state.confirmDeleteCode === drug.code ? 'hidden' : 'flex space-x-2 items-center'}">
+                                    <button id="edit-drug-btn" class="p-2 rounded-full text-blue-200 hover:bg-blue-600 transition" aria-label="Edit drug" title="Edit Drug">
+                                        <i data-lucide="edit-2" class="w-5 h-5"></i>
+                                    </button>
+                                    <button id="delete-drug-btn" class="p-2 rounded-full text-red-300 hover:bg-red-700 transition" aria-label="Delete drug" title="Delete Drug">
+                                        <i data-lucide="trash-2" class="w-5 h-5"></i>
+                                    </button>
+                                </div>
+
+                                <button id="close-selected-modal-btn" class="p-2 rounded-full text-blue-200 hover:bg-blue-800 transition ml-2" aria-label="Close details">
+                                    <i data-lucide="x" class="w-5 h-5"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="border-t border-blue-600 pt-4 space-y-2 text-blue-100">
+                            <p class="text-sm"><span class="font-semibold text-white">Code:</span> <span id="selected-drug-code">${drug.code}</span></p>
+                            <p class="text-sm"><span class="font-semibold text-white">Category:</span> <span id="selected-drug-category">${drug.category}</span></p>
+                            <p class="text-sm"><span class="font-semibold text-white">Dosage Form:</span> <span id="selected-drug-form">${drug.form}</span></p>
+                            <div class="mt-4 p-4 bg-blue-800 rounded-lg max-h-48 overflow-y-auto">
+                                <p class="font-semibold text-white mb-2 text-lg">Key Instructions / Remarks (Pop-up):</p>
+                                <p id="selected-drug-remarks" class="text-base leading-relaxed">${drug.remarks}</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            dom.modalContainer.innerHTML = modalHTML;
+            
+            if (typeof lucide !== 'undefined') {
+                lucide.createIcons();
+            } else {
+                console.warn('Lucide icons not loaded.');
+            }
+            
+            // Add event listeners
+            document.getElementById('selected-drug-modal').onclick = (e) => {
+                if (e.target.id === 'selected-drug-modal') {
+                    state.selectedDrugCode = null;
+                    state.confirmDeleteCode = null;
+                    fullRender();
+                }
+            };
+            document.getElementById('close-selected-modal-btn').onclick = () => {
+                state.selectedDrugCode = null;
+                state.confirmDeleteCode = null;
+                fullRender();
+            };
+            document.getElementById('edit-drug-btn').onclick = () => handleOpenEdit(drug);
+            document.getElementById('delete-drug-btn').onclick = () => {
+                state.confirmDeleteCode = drug.code;
+                fullRender();
+            };
+            if (state.confirmDeleteCode === drug.code) {
+                 document.getElementById('delete-confirm-yes').onclick = () => handleDelete(drug.code);
+                 document.getElementById('delete-confirm-cancel').onclick = () => {
+                     state.confirmDeleteCode = null;
+                     fullRender();
+                 };
+            }
+             document.getElementById('analyze-safety-btn').onclick = () => {
+                state.analysisDrug = drug;
+                fullRender();
+            };
+            document.getElementById('patient-handout-btn').onclick = () => {
+                state.patientHandoutDrug = drug;
+                fullRender();
+            };
+        }
+        
+        function renderDrugForm(drugToEdit) {
+            const isEdit = !!drugToEdit;
+            const formData = drugToEdit || { code: '', name: '', form: '', remarks: '', category: '' };
+            
+            const modalHTML = `
+                <div id="drug-form-modal" class="modal-backdrop fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center p-4">
+                    <div class="modal-content bg-white rounded-xl shadow-2xl w-full max-w-lg p-6 relative">
+                        <h2 id="drug-form-title" class="text-2xl font-bold text-gray-800 mb-6">${isEdit ? 'Edit Drug Entry' : 'Add New Drug'}</h2>
+                        <button id="close-form-modal-btn" class="absolute top-4 right-4 p-2 text-gray-500 hover:text-gray-900 rounded-full">
+                            <i data-lucide="x" class="w-5 h-5"></i>
+                        </button>
+                        <form id="drug-form" class="space-y-4">
+                            <input type="text" name="code" placeholder="Code Number (e.g., 01.99.01)" required class="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500" value="${formData.code}" ${isEdit ? 'disabled' : ''} />
+                            <input type="text" name="name" placeholder="Generic Name" required class="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500" value="${formData.name}" />
+                            <select name="category" required class="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 bg-white">
+                                <option value="" disabled ${formData.category === '' ? 'selected' : ''}>Select Category</option>
+                                ${['Antacid', 'Antispasmodic', 'Motility Stimulant', 'Ulcer Healing', 'Antidiarrheal', 'Other'].map(cat => 
+                                    `<option value="${cat}" ${formData.category === cat ? 'selected' : ''}>${cat}</option>`
+                                ).join('')}
+                            </select>
+                            <input type="text" name="form" placeholder="Dosage Form (e.g., Tablets, Suspension)" required class="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500" value="${formData.form}" />
+                            <textarea name="remarks" placeholder="Remarks / Key Instructions" rows="3" required class="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 resize-none">${formData.remarks}</textarea>
+                            <button type="submit" id="drug-form-submit-btn" class="w-full py-3 bg-blue-600 text-white font-semibold rounded-lg shadow-md hover:bg-blue-700 transition duration-200">
+                                ${isEdit ? 'Update Drug' : 'Add Drug'}
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            `;
+            dom.modalContainer.innerHTML = modalHTML;
+            
+            if (typeof lucide !== 'undefined') {
+                lucide.createIcons();
+            } else {
+                console.warn('Lucide icons not loaded.');
+            }
+            
+            // Add listeners
+            const formModal = document.getElementById('drug-form-modal');
+            formModal.onclick = (e) => {
+                if (e.target.id === 'drug-form-modal') {
+                    closeFormModal();
+                }
+            };
+            document.getElementById('close-form-modal-btn').onclick = closeFormModal;
+            document.getElementById('drug-form').onsubmit = (e) => {
+                e.preventDefault();
+                const formData = new FormData(e.target);
+                const drugData = Object.fromEntries(formData.entries());
+                if (isEdit) {
+                    drugData.code = drugToEdit.code; 
+                }
+                handleSave(drugData);
+                closeFormModal();
+            };
+        }
+        
+        async function renderAnalysisModal(drug) {
+             const modalHTML = `
+                <div id="analysis-modal" class="modal-backdrop fixed inset-0 bg-gray-900 bg-opacity-80 flex items-center justify-center p-4">
+                    <div class="modal-content bg-white rounded-xl shadow-2xl w-full max-w-2xl p-6 relative text-gray-800 max-h-[90vh] overflow-y-auto">
+                        <h2 class="text-2xl font-bold text-blue-600 mb-4 border-b pb-2">
+                            Safety Analysis: <span id="analysis-drug-name">${drug.name}</span>
+                        </h2>
+                        <button id="close-analysis-modal-btn" class="absolute top-4 right-4 p-2 text-gray-500 hover:text-gray-900 rounded-full">
+                            <i data-lucide="x" class="w-5 h-5"></i>
+                        </button>
+                        <div id="analysis-loading" class="flex flex-col items-center justify-center py-10">
+                            <i data-lucide="loader" class="w-8 h-8 text-blue-500 animate-spin"></i>
+                            <p class="mt-4 text-gray-600">Checking current drug safety information...</p>
+                        </div>
+                        <div id="analysis-error" class="hidden text-red-600 bg-red-50 p-4 rounded-lg">
+                            <p class="font-semibold">Analysis Failed:</p>
+                            <p id="analysis-error-message"></p>
+                        </div>
+                        <div id="analysis-result" class="hidden space-y-6">
+                            <div>
+                                <h3 class="text-lg font-bold text-red-600 mb-2 flex items-center">
+                                    <i data-lucide="alert-triangle" class='w-5 h-5 mr-2'></i> Black Box Warning
+                                </h3>
+                                <div class="bg-red-50 p-4 rounded-lg border border-red-200">
+                                    <p id="analysis-bbw" class="text-sm italic font-medium"></p>
+                                </div>
+                            </div>
+                            <div>
+                                <h3 class="text-lg font-bold text-yellow-700 mb-2">Important Drug Interactions</h3>
+                                <ul id="analysis-interactions" class="list-disc list-inside space-y-1 ml-4 text-sm"></ul>
+                            </div>
+                            <div>
+                                <h3 class="text-lg font-bold text-purple-700 mb-2">Critical Contraindications</h3>
+                                <ul id="analysis-contraindications" class="list-disc list-inside space-y-1 ml-4 text-sm"></ul>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+             `;
+             dom.modalContainer.innerHTML = modalHTML;
+             
+             if (typeof lucide !== 'undefined') {
+                lucide.createIcons();
+             } else {
+                console.warn('Lucide icons not loaded.');
+             }
+             
+             // Add listeners
+             const analysisModal = document.getElementById('analysis-modal');
+             analysisModal.onclick = (e) => {
+                 if (e.target.id === 'analysis-modal') {
+                     closeAnalysisModal();
+                 }
+             };
+             document.getElementById('close-analysis-modal-btn').onclick = closeAnalysisModal;
+             
+             await handleDrugAnalysis(drug);
+        }
+
+        async function renderPatientHandoutModal(drug) {
+             const modalHTML = `
+                <div id="handout-modal" class="modal-backdrop fixed inset-0 bg-gray-900 bg-opacity-80 flex items-center justify-center p-4">
+                    <div class="modal-content bg-white rounded-xl shadow-2xl w-full max-w-2xl p-6 relative text-gray-800 max-h-[90vh] overflow-y-auto">
+                        <h2 class="text-2xl font-bold text-teal-600 mb-4 border-b pb-2">
+                            Patient Handout: <span id="handout-drug-name">${drug.name}</span>
+                        </h2>
+                        <button id="close-handout-modal-btn" class="absolute top-4 right-4 p-2 text-gray-500 hover:text-gray-900 rounded-full">
+                            <i data-lucide="x" class="w-5 h-5"></i>
+                        </button>
+                        <div id="handout-loading" class="flex flex-col items-center justify-center py-10">
+                            <i data-lucide="loader" class="w-8 h-8 text-teal-500 animate-spin"></i>
+                            <p class="mt-4 text-gray-600">Generating patient-friendly guide...</p>
+                        </div>
+                        <div id="handout-error" class="hidden text-red-600 bg-red-50 p-4 rounded-lg">
+                            <p class="font-semibold">Generation Failed:</p>
+                            <p id="handout-error-message"></p>
+                        </div>
+                        <div id="handout-result" class="hidden space-y-4">
+                            <h3 class="text-lg font-bold text-gray-800">What is this drug used for?</h3>
+                            <p id="handout-what-for" class="text-gray-700 bg-gray-50 p-3 rounded-lg"></p>
+                            
+                            <h3 class="text-lg font-bold text-gray-800">How should I take it?</h3>
+                            <p id="handout-how-to-take" class="text-gray-700 bg-gray-50 p-3 rounded-lg"></p>
+                            
+                            <h3 class="text-lg font-bold text-gray-800">What are some common side effects?</h3>
+                            <ul id="handout-side-effects" class="list-disc list-inside space-y-1 ml-4 text-gray-700"></ul>
+                            
+                            <h3 class="text-lg font-bold text-gray-800">A friendly tip from your pharmacist:</h3>
+                            <p id="handout-tip" class="text-teal-700 bg-teal-50 p-3 rounded-lg italic"></p>
+                        </div>
+                    </div>
+                </div>
+             `;
+             dom.modalContainer.innerHTML = modalHTML;
+             
+             if (typeof lucide !== 'undefined') {
+                lucide.createIcons();
+             } else {
+                console.warn('Lucide icons not loaded.');
+             }
+             
+             // Add listeners
+             const handoutModal = document.getElementById('handout-modal');
+             handoutModal.onclick = (e) => {
+                 if (e.target.id === 'handout-modal') {
+                     closePatientHandoutModal();
+                 }
+             };
+             document.getElementById('close-handout-modal-btn').onclick = closePatientHandoutModal;
+             
+             await generatePatientHandout(drug);
+        }
+
+        function showMessage(msg) {
+            if (state.messageTimer) {
+                clearTimeout(state.messageTimer);
+            }
+            dom.messageToast.textContent = msg;
+            dom.messageToast.classList.remove('hidden', 'opacity-0');
+            dom.messageToast.classList.add('animate-fadeInOut');
+            
+            state.messageTimer = setTimeout(() => {
+                 dom.messageToast.classList.add('hidden', 'opacity-0');
+                 dom.messageToast.classList.remove('animate-fadeInOut');
+                 state.messageTimer = null;
+            }, 5000);
+        }
+
+        // --- MODAL CONTROL ---
+        function closeFormModal() {
+            state.isFormOpen = false;
+            state.currentEditDrug = null;
+            fullRender();
+        }
+        
+        function closeAnalysisModal() {
+            state.analysisDrug = null;
+            fullRender();
+        }
+
+        function closePatientHandoutModal() {
+            state.patientHandoutDrug = null;
+            fullRender();
+        }
+        
+        function handleOpenEdit(drug) {
+            state.currentEditDrug = drug;
+            state.isFormOpen = true;
+            fullRender();
+        }
+
+        function handleOpenAdd() {
+            state.currentEditDrug = null;
+            state.selectedDrugCode = null;
+            state.analysisDrug = null;
+            state.patientHandoutDrug = null;
+            state.isFormOpen = true;
+            fullRender();
+        }
+        
+        // --- DATA & EVENT HANDLERS ---
+        function findDrug(code) {
+            return state.drugs.find(d => d.code === code);
+        }
+        
+        function getFilteredDrugs() {
+            let currentDrugs = state.drugs;
+
+            if (state.selectedCategory !== 'All') {
+                currentDrugs = currentDrugs.filter(drug => drug.category === state.selectedCategory);
+            }
+
+            // ROBUST SEARCH FIX: Handle null/undefined and trim
+            const searchTerm = String(state.searchTerm || '').trim().toLowerCase();
+            if (searchTerm) {
+                currentDrugs = currentDrugs.filter(drug =>
+                    (drug.name || '').toLowerCase().includes(searchTerm) ||
+                    (drug.code || '').toLowerCase().includes(searchTerm) ||
+                    (drug.remarks || '').toLowerCase().includes(searchTerm)
+                );
+            }
+
+            return currentDrugs.sort((a, b) => a.code.localeCompare(b.code));
+        }
+        
+        function handleDrugSelect(drug) {
+            state.selectedDrugCode = drug.code === state.selectedDrugCode ? null : drug.code;
+            state.currentEditDrug = null;
+            state.confirmDeleteCode = null;
+            state.analysisDrug = null;
+            state.patientHandoutDrug = null;
+            fullRender();
+        }
+        
+        // NEW: Handler for single row checkbox
+        function handleSelectRow(isChecked, code) {
+            if (isChecked) {
+                if (!state.selectedDrugs.includes(code)) {
+                    state.selectedDrugs.push(code);
+                }
+            } else {
+                state.selectedDrugs = state.selectedDrugs.filter(c => c !== code);
+            }
+            // Re-render table to update buttons and select-all state
+            renderTable(); 
+        }
+
+        // NEW: Handler for "Select All" checkbox
+        function handleSelectAll(isChecked) {
+            const filteredDrugs = getFilteredDrugs();
+            if (isChecked) {
+                // Add all *visible* drugs to selection
+                filteredDrugs.forEach(drug => {
+                    if (!state.selectedDrugs.includes(drug.code)) {
+                        state.selectedDrugs.push(drug.code);
+                    }
+                });
+            } else {
+                // Remove all *visible* drugs from selection
+                const visibleCodes = filteredDrugs.map(d => d.code);
+                state.selectedDrugs = state.selectedDrugs.filter(code => !visibleCodes.includes(code));
+            }
+            renderTable();
+        }
+
+        function handleSave(drugData) {
+            const index = state.drugs.findIndex(d => d.code === drugData.code);
+            if (index !== -1) {
+                state.drugs[index] = drugData;
+                showMessage(`Drug ${drugData.code} updated successfully.`);
+            } else {
+                if (state.drugs.some(d => d.code === drugData.code)) {
+                    showMessage('Error: Drug code already exists.');
+                    return;
+                }
+                state.drugs.push(drugData);
+                showMessage(`Drug ${drugData.code} added successfully.`);
+            }
+            state.selectedDrugCode = null;
+            saveState();
+        }
+
+        function handleDelete(code) {
+            state.drugs = state.drugs.filter(d => d.code !== code);
+            // NEW: Remove from selection if it was selected
+            state.selectedDrugs = state.selectedDrugs.filter(c => c !== code);
+            showMessage(`Drug ${code} deleted.`);
+            state.selectedDrugCode = null;
+            state.confirmDeleteCode = null;
+            saveState();
+        }
+        
+        // MODIFIED: Renamed to handleExportAll
+        function handleExportAll() {
+            const headers = ['Code', 'Generic Name', 'Form', 'Remarks', 'Category'];
+            const rows = state.drugs.map(d => [
+                `"${(d.code || '').replace(/"/g, '""')}"`,
+                `"${(d.name || '').replace(/"/g, '""')}"`,
+                `"${(d.form || '').replace(/"/g, '""')}"`,
+                `"${(d.remarks || '').replace(/"/g, '""')}"`,
+                `"${(d.category || '').replace(/"/g, '""')}"`,
+            ].join(','));
+
+            const csvContent = [headers.join(','), ...rows].join('\n');
+
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `git_drug_reference_ALL_${new Date().toISOString().slice(0, 10)}.csv`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            showMessage('All data exported successfully as CSV!');
+        }
+        
+        // NEW: Handler for exporting selected drugs
+        function handleExportSelected() {
+            const selectedDrugsData = state.drugs.filter(d => state.selectedDrugs.includes(d.code));
+            if (selectedDrugsData.length === 0) {
+                showMessage("No items selected to export.");
+                return;
+            }
+            
+            const headers = ['Code', 'Generic Name', 'Form', 'Remarks', 'Category'];
+            const rows = selectedDrugsData.map(d => [
+                `"${(d.code || '').replace(/"/g, '""')}"`,
+                `"${(d.name || '').replace(/"/g, '""')}"`,
+                `"${(d.form || '').replace(/"/g, '""')}"`,
+                `"${(d.remarks || '').replace(/"/g, '""')}"`,
+                `"${(d.category || '').replace(/"/g, '""')}"`,
+            ].join(','));
+
+            const csvContent = [headers.join(','), ...rows].join('\n');
+            
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `git_drug_reference_selected_${new Date().toISOString().slice(0, 10)}.csv`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            showMessage(`${selectedDrugsData.length} selected drugs exported.`);
+        }
+
+
+        // --- GEMINI API FUNCTIONS ---
+
+        function base64EncodeFile(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(reader.result.split(',')[1]); 
+                reader.onerror = error => reject(error);
+                reader.readAsDataURL(file);
+            });
+        };
+
+        async function handleDrugAnalysis(drug) {
+            const loadingEl = document.getElementById('analysis-loading');
+            const errorEl = document.getElementById('analysis-error');
+            const errorMessageEl = document.getElementById('analysis-error-message');
+            const resultEl = document.getElementById('analysis-result');
+            
+            try {
+                const userQuery = `For the drug ${drug.name}, provide details on its Black Box Warning, major drug-drug interactions to watch out for, and critical contraindications (excluding common ones like hypersensitivity).`;
+                const systemPrompt = "You are a highly specialized pharmaceutical expert and data extraction agent. Provide an analysis for the specified drug, focusing only on critical safety information: black box warnings, major drug-drug interactions, and critical patient contraindications (like specific diseases or patient groups). Exclude general warnings or common contraindications (like hypersensitivity). The output MUST be a structured JSON object. Do not include any text outside the JSON block. If a warning category is not applicable, use an empty array or 'N/A' as appropriate.";
+ 
+                const payload = {
+                    contents: [{ parts: [{ text: userQuery }] }],
+                    // tools: [{ "google_search": {} }], // Removed per user request
+                    systemInstruction: { parts: [{ text: systemPrompt }] },
+                    generationConfig: {
+                        responseMimeType: "application/json",
+                        responseSchema: {
+                            type: "OBJECT",
+                            properties: {
+                                "blackBoxWarning": { "type": "STRING", "description": "The full text of the black box warning, or 'N/A'." },
+                                "majorInteractions": { "type": "ARRAY", "items": { "type": "STRING" }, "description": "List of major drug interactions." },
+                                "criticalContraindications": { "type": "ARRAY", "items": { "type": "STRING" }, "description": "List of critical patient contraindications." }
+                            },
+                            propertyOrdering: ["blackBoxWarning", "majorInteractions", "criticalContraindications"]
+                        }
+                    }
+                };
+
+                const responseJson = await callGeminiApi(payload);
+                const resultText = responseJson?.candidates?.[0]?.content?.parts?.[0]?.text;
+
+                if (!resultText) {
+                    throw new Error('Analysis failed. Could not parse model response.');
+                }
+
+                const parsedResult = JSON.parse(resultText);
+                
+                const bbwEl = document.getElementById('analysis-bbw');
+                const interactionsEl = document.getElementById('analysis-interactions');
+                const contraindicationsEl = document.getElementById('analysis-contraindications');
+
+                bbwEl.textContent = parsedResult.blackBoxWarning || 'N/A';
+                
+                interactionsEl.innerHTML = '';
+                if (Array.isArray(parsedResult.majorInteractions) && parsedResult.majorInteractions.length > 0) {
+                    parsedResult.majorInteractions.forEach(item => {
+                        const li = document.createElement('li');
+                        li.textContent = item;
+                        interactionsEl.appendChild(li);
+                    });
+                } else {
+                    interactionsEl.innerHTML = '<li>No major interactions listed.</li>';
+                }
+
+                contraindicationsEl.innerHTML = '';
+                if (Array.isArray(parsedResult.criticalContraindications) && parsedResult.criticalContraindications.length > 0) {
+                    parsedResult.criticalContraindications.forEach(item => {
+                        const li = document.createElement('li');
+                        li.textContent = item;
+                        contraindicationsEl.appendChild(li);
+                    });
+                } else {
+                    contraindicationsEl.innerHTML = '<li>No critical contraindications listed.</li>';
+                }
+                
+                loadingEl.classList.add('hidden');
+                resultEl.classList.remove('hidden');
+
+            } catch (error) {
+                showMessage(`Analysis failed. ${error.message}`);
+                console.error('Analysis Process Error:', error);
+                
+                if (errorMessageEl) {
+                    errorMessageEl.textContent = `Could not retrieve analysis: ${error.message}.`;
+                }
+                if (loadingEl) loadingEl.classList.add('hidden');
+                if (errorEl) errorEl.classList.remove('hidden');
+            }
+        }
+        
+        async function generatePatientHandout(drug) {
+            const loadingEl = document.getElementById('handout-loading');
+            const errorEl = document.getElementById('handout-error');
+            const errorMessageEl = document.getElementById('handout-error-message');
+            const resultEl = document.getElementById('handout-result');
+            
+            try {
+                const userQuery = `Generate a patient handout for the drug: ${drug.name}. The tone should be simple, encouraging, and easy to understand, as if from a friendly pharmacist.`;
+                const systemPrompt = "You are a pharmaceutical expert with a talent for simple, clear communication. You will generate a patient handout. The output MUST be a structured JSON object. Do not include any text outside the JSON block.";
+ 
+                const payload = {
+                    contents: [{ parts: [{ text: userQuery }] }],
+                    // tools: [{ "google_search": {} }], // Removed per user request
+                    systemInstruction: { parts: [{ text: systemPrompt }] },
+                    generationConfig: {
+                        responseMimeType: "application/json",
+                        responseSchema: {
+                            type: "OBJECT",
+                            properties: {
+                                "whatFor": { "type": "STRING", "description": "A simple, one-sentence explanation of what the drug is used for." },
+                                "howToTake": { "type": "STRING", "description": "A simple instruction on how to take the medication (e.g., 'with food', 'before meals')." },
+                                "sideEffects": { "type": "ARRAY", "items": { "type": "STRING" }, "description": "A short list (2-3 items) of common, non-scary side effects." },
+                                "tip": { "type": "STRING", "description": "A single, friendly, encouraging tip." }
+                            },
+                            propertyOrdering: ["whatFor", "howToTake", "sideEffects", "tip"]
+                        }
+                    }
+                };
+
+                const responseJson = await callGeminiApi(payload);
+                const resultText = responseJson?.candidates?.[0]?.content?.parts?.[0]?.text;
+
+                if (!resultText) {
+                    throw new Error('Handout generation failed. Could not parse model response.');
+                }
+
+                const parsedResult = JSON.parse(resultText);
+                
+                document.getElementById('handout-what-for').textContent = parsedResult.whatFor || 'N/A';
+                document.getElementById('handout-how-to-take').textContent = parsedResult.howToTake || 'N/A';
+                document.getElementById('handout-tip').textContent = parsedResult.tip || 'Take care!';
+                
+                const sideEffectsEl = document.getElementById('handout-side-effects');
+                sideEffectsEl.innerHTML = '';
+                if (Array.isArray(parsedResult.sideEffects) && parsedResult.sideEffects.length > 0) {
+                    parsedResult.sideEffects.forEach(item => {
+                        const li = document.createElement('li');
+                        li.textContent = item;
+                        sideEffectsEl.appendChild(li);
+                    });
+                } else {
+                    sideEffectsEl.innerHTML = '<li>No common side effects listed.</li>';
+                }
+                
+                loadingEl.classList.add('hidden');
+                resultEl.classList.remove('hidden');
+
+            } catch (error) {
+                showMessage(`Handout failed. ${error.message}`);
+                console.error('Handout Process Error:', error);
+                
+                if (errorMessageEl) {
+                    errorMessageEl.textContent = `Could not generate handout: ${error.message}.`;
+                }
+                if (loadingEl) loadingEl.classList.add('hidden');
+                if (errorEl) errorEl.classList.remove('hidden');
+            }
+        }
+
+        async function handleOCRUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            setOCRLoading(true);
+            
+            try {
+                const base64Data = await base64EncodeFile(file);
+
+                const userQuery = "This is an image of a drug reference page. Extract all drug entries into a JSON array. Each object in the array must have these exact keys: 'code' (string), 'name' (string), 'form' (string), 'remarks' (string), and 'category' (string, one of: Antacid, Antispasmodic, Motility Stimulant, Ulcer Healing, Antidiarrheal, Other).";
+                const systemPrompt = "You are an OCR data extraction expert specializing in pharmaceutical documents. You will be given an image and must return *only* a valid JSON array of drug objects based on the user's requested schema. Do not include any text, markdown, or explanations outside of the JSON array. If the image is unreadable, return an empty array [].";
+
+                const payload = {
+                    contents: [
+                        {
+                            parts: [
+                                { text: userQuery },
+                                { inlineData: { mimeType: file.type, data: base64Data } }
+                            ]
+                        }
+                    ],
+                    systemInstruction: { parts: [{ text: systemPrompt }] },
+                    generationConfig: {
+                        responseMimeType: "application/json",
+                        responseSchema: {
+                            type: "ARRAY",
+                            items: {
+                                type: "OBJECT",
+                                properties: {
+                                    "code": { "type": "STRING" },
+                                    "name": { "type": "STRING" },
+                                    "form": { "type": "STRING" },
+                                    "remarks": { "type": "STRING" },
+                                    "category": { "type": "STRING" }
+                                },
+                                propertyOrdering: ["code", "name", "form", "remarks", "category"]
+                            }
+                        }
+                    }
+                };
+
+                const responseJson = await callGeminiApi(payload);
+                const resultText = responseJson?.candidates?.[0]?.content?.parts?.[0]?.text;
+                
+                if (!resultText) {
+                    throw new Error('OCR extraction failed. Could not parse model response.');
+                }
+
+                const importedData = JSON.parse(resultText);
+
+                if (Array.isArray(importedData)) {
+                    let newDrugs = 0;
+                    let updatedDrugs = 0;
+                    let currentDrugs = [...state.drugs];
+
+                    importedData.forEach(drug => {
+                        if (drug.code && drug.name && drug.form) {
+                            const existingIndex = currentDrugs.findIndex(d => d.code === drug.code);
+                            if (existingIndex !== -1) {
+                                currentDrugs[existingIndex] = drug;
+                                updatedDrugs++;
+                            } else {
+                                currentDrugs.push(drug);
+                                newDrugs++;
+                            }
+                        }
+                    });
+
+                    state.drugs = currentDrugs;
+                    showMessage(`OCR successful! Added ${newDrugs} new drugs and updated ${updatedDrugs} existing entries.`);
+                    state.selectedDrugCode = null;
+                    saveState();
+                } else {
+                    throw new Error('OCR failed: Model did not return a valid JSON array structure.');
+                }
+
+            } catch (error) {
+                showMessage(`OCR failed. ${error.message}`);
+                console.error('OCR Process Error:', error);
+            } finally {
+                setOCRLoading(false);
+                event.target.value = null;
+            }
+        }
+        
+        async function callGeminiApi(payload) {
+             const maxRetries = 3;
+             let lastError = null;
+
+            for (let i = 0; i < maxRetries; i++) {
+                try {
+                    const response = await fetch(API_URL, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+
+                    if (!response.ok) {
+                         lastError = new Error(`HTTP error! status: ${response.status}`);
+                         if (response.status === 400 && i === 0) {
+                             console.error("API Call Error 400: Ensure the API key is valid or correctly provided by the environment.");
+                             lastError = new Error(`HTTP error! status: ${response.status}. Please check your API key and network connection.`);
+                        }
+                        if (i < maxRetries - 1) {
+                            await new Promise(resolve => setTimeout(resolve, Math.pow(2, i) * 1000));
+                            continue; 
+                        }
+                        throw lastError; 
+                    }
+
+                    return await response.json();
+                } catch (err) {
+                    lastError = err;
+                    if (i < maxRetries - 1) {
+                         await new Promise(resolve => setTimeout(resolve, Math.pow(2, i) * 1000));
+                    } else {
+                        console.error("API call failed after all retries:", lastError);
+                        throw lastError;
+                    }
+                }
+            }
+            throw lastError; 
+        }
+        
+        function setOCRLoading(isLoading) {
+            state.isOCRLoading = isLoading;
+            if (isLoading) {
+                dom.ocrLabel.classList.add('bg-gray-400');
+                dom.ocrLabel.classList.remove('bg-orange-500', 'hover:bg-orange-600');
+                dom.ocrLabelContent.classList.add('hidden');
+                dom.ocrLoadingContent.classList.remove('hidden');
+                dom.ocrUploadInput.disabled = true;
+            } else {
+                dom.ocrLabel.classList.remove('bg-gray-400');
+                dom.ocrLabel.classList.add('bg-orange-500', 'hover:bg-orange-600');
+                dom.ocrLabelContent.classList.remove('hidden');
+                dom.ocrLoadingContent.classList.add('hidden');
+                dom.ocrUploadInput.disabled = false;
+            }
+        }
+        
+        // --- INITIALIZATION ---
+        window.onload = () => {
+            loadState();
+            
+            fullRender();
+            
+            if (typeof lucide !== 'undefined') {
+                lucide.createIcons();
+            } else {
+                console.warn('Lucide icons not loaded.');
+            }
+            
+            // Attach main event listeners
+            dom.searchTermInput.oninput = (e) => {
+                state.searchTerm = e.target.value;
+                state.selectedDrugCode = null;
+                dom.clearSearchBtn.classList.toggle('hidden', !state.searchTerm);
+                renderTable(); // Re-render table to show filtered results
+            };
+            
+            dom.clearSearchBtn.onclick = () => {
+                state.searchTerm = '';
+                dom.searchTermInput.value = '';
+                dom.clearSearchBtn.classList.add('hidden');
+                state.selectedDrugCode = null;
+                renderTable();
+            };
+            
+            // MODIFIED: Renamed button handler
+            dom.exportAllBtn.onclick = handleExportAll;
+            // NEW: Added handlers for multi-select
+            dom.exportSelectedBtn.onclick = handleExportSelected;
+            dom.selectAllCheckbox.onchange = (e) => handleSelectAll(e.target.checked);
+
+            dom.ocrUploadInput.onchange = handleOCRUpload;
+            dom.addNewDrugBtn.onclick = handleOpenAdd;
+        };
+
+    </script>
+</body>
+</html>
+
