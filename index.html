@@ -606,10 +606,16 @@
                      closeAnalysisModal();
                  }
              };
+             // FIX: Added close button listener
+             document.getElementById('close-analysis-modal-btn').onclick = closeAnalysisModal;
+             
+             // FIX: Added call to the analysis function
+             await handleDrugAnalysis(drug);
         }
         
         // NEW: Modal for bulk text import
         function renderBulkImportModal() {
+            // MODIFIED: Reverted to JSON example and instructions
             const exampleJSON = `[
   {
     "code": "01.99.01",
@@ -629,17 +635,20 @@
             const modalHTML = `
                 <div id="bulk-import-modal" class="modal-backdrop fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center p-4">
                     <div class="modal-content bg-white rounded-xl shadow-2xl w-full max-w-2xl p-6 relative">
+                        <!-- MODIFIED: Title -->
                         <h2 class="text-2xl font-bold text-gray-800 mb-4">Bulk JSON Import</h2>
                         <button id="close-bulk-import-modal-btn" class="absolute top-4 right-4 p-2 text-gray-500 hover:text-gray-900 rounded-full">
                             <i data-lucide="x" class="w-5 h-5"></i>
                         </button>
                         
+                        <!-- MODIFIED: Instructions -->
                         <p class="text-sm text-gray-600 mb-2">
                             Paste an array of drug objects in JSON format below. Any existing drugs with the same code will be updated.
                         </p>
                         <p class="text-sm text-gray-600 mb-2"><strong>Required fields:</strong> <code>code</code>, <code>name</code>. Optional: <code>form</code>, <code>remarks</code>, <code>category</code>.</p>
                         
                         <div class="mb-4 bg-gray-800 text-white p-3 rounded-lg max-h-32 overflow-y-auto">
+                            <!-- MODIFIED: Example text -->
                             <p class="text-sm font-medium mb-1 text-gray-300">Example Format:</p>
                             <pre class="text-xs"><code>${exampleJSON}</code></pre>
                         </div>
@@ -647,6 +656,7 @@
                         <textarea
                             id="bulk-import-text"
                             class="w-full h-48 p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 font-mono text-sm"
+                            <!-- MODIFIED: Placeholder text -->
                             placeholder="Paste your JSON array here..."
                         ></textarea>
                         
@@ -973,6 +983,7 @@
             
             let importedData;
             try {
+                // MODIFIED: Reverted to JSON.parse
                 importedData = JSON.parse(text);
             } catch (e) {
                 showMessage(`Import failed: Invalid JSON. ${e.message}`);
@@ -1031,6 +1042,13 @@
                 };
 
                 const responseJson = await callGeminiApi(payload);
+                
+                // FIX: Check if modal is still active before updating DOM
+                if (!state.analysisDrug || state.analysisDrug.code !== drug.code) {
+                    console.log("Analysis modal was closed before API returned. Aborting DOM update.");
+                    return;
+                }
+
                 const resultText = responseJson?.candidates?.[0]?.content?.parts?.[0]?.text;
 
                 if (!resultText) {
@@ -1039,41 +1057,47 @@
 
                 const parsedResult = JSON.parse(resultText);
                 
+                // FIX: Check for element existence before updating
                 const bbwEl = document.getElementById('analysis-bbw');
                 const interactionsEl = document.getElementById('analysis-interactions');
                 const contraindicationsEl = document.getElementById('analysis-contraindications');
 
-                bbwEl.textContent = parsedResult.blackBoxWarning || 'N/A';
+                if (bbwEl) bbwEl.textContent = parsedResult.blackBoxWarning || 'N/A';
                 
-                interactionsEl.innerHTML = '';
-                if (Array.isArray(parsedResult.majorInteractions) && parsedResult.majorInteractions.length > 0) {
-                    parsedResult.majorInteractions.forEach(item => {
-                        const li = document.createElement('li');
-                        li.textContent = item;
-                        interactionsEl.appendChild(li);
-                    });
-                } else {
-                    interactionsEl.innerHTML = '<li>No major interactions listed.</li>';
+                if (interactionsEl) {
+                    interactionsEl.innerHTML = '';
+                    if (Array.isArray(parsedResult.majorInteractions) && parsedResult.majorInteractions.length > 0) {
+                        parsedResult.majorInteractions.forEach(item => {
+                            const li = document.createElement('li');
+                            li.textContent = item;
+                            interactionsEl.appendChild(li);
+                        });
+                    } else {
+                        interactionsEl.innerHTML = '<li>No major interactions listed.</li>';
+                    }
                 }
 
-                contraindicationsEl.innerHTML = '';
-                if (Array.isArray(parsedResult.criticalContraindications) && parsedResult.criticalContraindications.length > 0) {
-                    parsedResult.criticalContraindications.forEach(item => {
-                        const li = document.createElement('li');
-                        li.textContent = item;
-                        contraindicationsEl.appendChild(li);
-                    });
-                } else {
-                    contraindicationsEl.innerHTML = '<li>No critical contraindications listed.</li>';
+                if (contraindicationsEl) {
+                    contraindicationsEl.innerHTML = '';
+                    if (Array.isArray(parsedResult.criticalContraindications) && parsedResult.criticalContraindications.length > 0) {
+                        parsedResult.criticalContraindications.forEach(item => {
+                            const li = document.createElement('li');
+                            li.textContent = item;
+                            contraindicationsEl.appendChild(li);
+                        });
+                    } else {
+                        contraindicationsEl.innerHTML = '<li>No critical contraindications listed.</li>';
+                    }
                 }
                 
-                loadingEl.classList.add('hidden');
-                resultEl.classList.remove('hidden');
+                if (loadingEl) loadingEl.classList.add('hidden');
+                if (resultEl) resultEl.classList.remove('hidden');
 
             } catch (error) {
                 showMessage(`Analysis failed. ${error.message}`);
                 console.error('Analysis Process Error:', error);
                 
+                // FIX: Check for element existence before updating
                 if (errorMessageEl) {
                     errorMessageEl.textContent = `Could not retrieve analysis: ${error.message}.`;
                 }
@@ -1112,6 +1136,13 @@
                 };
 
                 const responseJson = await callGeminiApi(payload);
+                
+                // FIX: Check if modal is still active before updating DOM
+                if (!state.patientHandoutDrug || state.patientHandoutDrug.code !== drug.code) {
+                    console.log("Patient handout modal was closed before API returned. Aborting DOM update.");
+                    return;
+                }
+
                 const resultText = responseJson?.candidates?.[0]?.content?.parts?.[0]?.text;
 
                 if (!resultText) {
@@ -1120,29 +1151,37 @@
 
                 const parsedResult = JSON.parse(resultText);
                 
-                document.getElementById('handout-what-for').textContent = parsedResult.whatFor || 'N/A';
-                document.getElementById('handout-how-to-take').textContent = parsedResult.howToTake || 'N/A';
-                document.getElementById('handout-tip').textContent = parsedResult.tip || 'Take care!';
-                
+                // FIX: Check for element existence before updating
+                const whatForEl = document.getElementById('handout-what-for');
+                const howToTakeEl = document.getElementById('handout-how-to-take');
+                const tipEl = document.getElementById('handout-tip');
                 const sideEffectsEl = document.getElementById('handout-side-effects');
-                sideEffectsEl.innerHTML = '';
-                if (Array.isArray(parsedResult.sideEffects) && parsedResult.sideEffects.length > 0) {
-                    parsedResult.sideEffects.forEach(item => {
-                        const li = document.createElement('li');
-                        li.textContent = item;
-                        sideEffectsEl.appendChild(li);
-                    });
-                } else {
-                    sideEffectsEl.innerHTML = '<li>No common side effects listed.</li>';
+
+                if (whatForEl) whatForEl.textContent = parsedResult.whatFor || 'N/A';
+                if (howToTakeEl) howToTakeEl.textContent = parsedResult.howToTake || 'N/A';
+                if (tipEl) tipEl.textContent = parsedResult.tip || 'Take care!';
+                
+                if (sideEffectsEl) {
+                    sideEffectsEl.innerHTML = '';
+                    if (Array.isArray(parsedResult.sideEffects) && parsedResult.sideEffects.length > 0) {
+                        parsedResult.sideEffects.forEach(item => {
+                            const li = document.createElement('li');
+                            li.textContent = item;
+                            sideEffectsEl.appendChild(li);
+                        });
+                    } else {
+                        sideEffectsEl.innerHTML = '<li>No common side effects listed.</li>';
+                    }
                 }
                 
-                loadingEl.classList.add('hidden');
-                resultEl.classList.remove('hidden');
+                if (loadingEl) loadingEl.classList.add('hidden');
+                if (resultEl) resultEl.classList.remove('hidden');
 
             } catch (error) {
                 showMessage(`Handout failed. ${error.message}`);
                 console.error('Handout Process Error:', error);
                 
+                // FIX: Check for element existence before updating
                 if (errorMessageEl) {
                     errorMessageEl.textContent = `Could not generate handout: ${error.message}.`;
                 }
@@ -1373,5 +1412,4 @@
     </script>
 </body>
 </html>
-
 
