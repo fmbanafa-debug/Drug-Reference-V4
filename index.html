@@ -133,11 +133,15 @@
         </div>
 
         <!-- Category Filters -->
-        <div id="category-filters" class="mb-8 overflow-x-auto whitespace-nowrap pb-2 scrollbar-hide">
-            <div class="flex space-x-3">
-                <!-- Category buttons will be injected here by JS -->
-            </div>
+        <!-- MODIFIED: Replaced horizontal scroll with a dropdown-style button -->
+        <div id="category-filters-container" class="mb-6">
+            <label class="text-sm font-medium text-gray-700">Filter by Category:</label>
+            <button id="category-filter-trigger" class="mt-1 flex items-center justify-between w-full sm:w-72 px-4 py-3 bg-white text-gray-900 font-semibold rounded-lg shadow-md hover:bg-gray-50 transition border border-gray-200">
+                <span id="category-filter-label" class="truncate pr-2">All</span>
+                <i data-lucide="chevron-down" class="w-5 h-5 text-gray-400 flex-shrink-0"></i>
+            </button>
         </div>
+
 
         <!-- Drug List Table -->
         <div class="bg-white rounded-xl shadow-xl overflow-hidden">
@@ -195,7 +199,9 @@
             ocrLabelContent: document.getElementById('ocr-label-content'),
             ocrLoadingContent: document.getElementById('ocr-loading-content'),
             ocrUploadInput: document.getElementById('ocr-upload'),
-            categoryFilters: document.getElementById('category-filters').querySelector('div'),
+            // MODIFIED: Replaced categoryFilters with new trigger and label
+            categoryFilterTrigger: document.getElementById('category-filter-trigger'),
+            categoryFilterLabel: document.getElementById('category-filter-label'),
             drugTableBody: document.getElementById('drug-table-body'),
             addNewDrugBtn: document.getElementById('add-new-drug-btn'),
             bulkImportBtn: document.getElementById('bulk-import-btn'), // NEW
@@ -238,6 +244,8 @@
             selectedDrugs: [], // NEW: Store selected drug codes
             confirmDeleteSelected: false, // NEW: For delete confirmation
             isBulkImportOpen: false, // NEW
+            isCategoryModalOpen: false, // NEW: For category modal
+            categorySearchTerm: '', // NEW: For searching categories
             messageTimer: null
         };
  
@@ -276,7 +284,9 @@
         
         function fullRender() {
             renderTable();
-            renderCategories();
+            // MODIFIED: Update category button text instead of rendering list
+            dom.categoryFilterLabel.textContent = state.selectedCategory;
+            
             dom.drugCount.textContent = state.drugs.length;
             
             dom.modalContainer.innerHTML = '';
@@ -285,6 +295,8 @@
                 renderConfirmDeleteSelectedModal();
             } else if (state.isBulkImportOpen) { // NEW
                 renderBulkImportModal();
+            } else if (state.isCategoryModalOpen) { // NEW
+                renderCategoryModal();
             } else if (state.isFormOpen) {
                 renderDrugForm(state.currentEditDrug);
             } else if (state.analysisDrug) {
@@ -296,32 +308,7 @@
             }
         }
         
-        function renderCategories() {
-            dom.categoryFilters.innerHTML = '';
-            state.categories.forEach(category => {
-                const isActive = category === state.selectedCategory;
-                const button = document.createElement('button');
-                button.textContent = category;
-                button.className = `
-                    px-4 py-2 text-sm font-medium transition-all duration-200 rounded-full shadow-md
-                    ${isActive
-                        ? 'bg-blue-600 text-white shadow-blue-400/50 scale-105'
-                        : 'bg-white text-gray-700 hover:bg-gray-100'
-                    }
-                `;
-                button.onclick = () => {
-                    state.selectedCategory = category;
-                    state.selectedDrugCode = null;
-                    state.confirmDeleteCode = null;
-                    state.analysisDrug = null;
-                    state.patientHandoutDrug = null;
-                    state.confirmDeleteSelected = false; // NEW
-                    state.isBulkImportOpen = false; // NEW
-                    fullRender();
-                };
-                dom.categoryFilters.appendChild(button);
-            });
-        }
+        // REMOVED Defunct renderCategories() function
 
         function renderTable() {
             dom.drugTableBody.innerHTML = '';
@@ -488,10 +475,12 @@
             }
              document.getElementById('analyze-safety-btn').onclick = () => {
                 state.analysisDrug = drug;
+                state.isCategoryModalOpen = false; // NEW: Close category modal if open
                 fullRender();
             };
              document.getElementById('patient-handout-btn').onclick = () => {
                 state.patientHandoutDrug = drug;
+                state.isCategoryModalOpen = false; // NEW: Close category modal if open
                 fullRender();
             };
         }
@@ -593,6 +582,7 @@
              `;
              dom.modalContainer.innerHTML = modalHTML;
              
+             // FIX: Corrected the mangled if(lucide) block
              if (typeof lucide !== 'undefined') {
                 lucide.createIcons();
              } else {
@@ -615,6 +605,7 @@
         
         // NEW: Modal for bulk text import
         // MODIFIED: Updated for CSV import
+        // FIX: Replaced entire broken function with the correct version
         function renderBulkImportModal() {
             // MODIFIED: Changed example to CSV format
             const exampleCSV = `code,name,form,remarks,category
@@ -677,6 +668,8 @@
             
             if (typeof lucide !== 'undefined') {
                 lucide.createIcons();
+            } else {
+                console.warn('Lucide icons not loaded.');
             }
 
             // Add listeners
@@ -688,7 +681,6 @@
             document.getElementById('close-bulk-import-modal-btn').onclick = closeBulkImportModal;
             document.getElementById('bulk-import-submit-btn').onclick = handleBulkImportSubmit;
 
-            // NEW: Add listener for file input to show filename
             document.getElementById('bulk-import-file-input').onchange = (e) => {
                 const file = e.target.files[0];
                 if (file) {
@@ -713,11 +705,97 @@
                 document.getElementById('bulk-import-text-ui').classList.add('hidden');
             };
         }
+        
+        // NEW: Modal for selecting a category
+        function renderCategoryModal() {
+            const modalHTML = `
+                <div id="category-modal" class="modal-backdrop fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center p-4">
+                    <div class="modal-content bg-white rounded-xl shadow-2xl w-full max-w-md p-6 relative max-h-[70vh] flex flex-col">
+                        <h2 class="text-2xl font-bold text-gray-800 mb-4">Select Category</h2>
+                        <button id="close-category-modal-btn" class="absolute top-4 right-4 p-2 text-gray-500 hover:text-gray-900 rounded-full">
+                            <i data-lucide="x" class="w-5 h-5"></i>
+                        </button>
 
-        // MODIFIED: Renamed function from renderAnalysisModal to renderPatientHandoutModal
+                        <!-- Search Bar -->
+                        <div class="relative mb-4">
+                            <i data-lucide="search" class="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400"></i>
+                            <input
+                                type="text"
+                                id="category-modal-search"
+                                placeholder="Search categories..."
+                                class="w-full py-2 pl-10 pr-4 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition"
+                                value="${state.categorySearchTerm}"
+                            />
+                        </div>
+
+                        <!-- Category List -->
+                        <ul id="category-modal-list" class="flex-1 overflow-y-auto space-y-1">
+                            <!-- Categories will be injected here -->
+                        </ul>
+                    </div>
+                </div>
+            `;
+            dom.modalContainer.innerHTML = modalHTML;
+            
+            if (typeof lucide !== 'undefined') {
+                lucide.createIcons();
+            }
+
+            // Add listeners
+            document.getElementById('category-modal').onclick = (e) => {
+                if (e.target.id === 'category-modal') {
+                    handleCloseCategoryModal();
+                }
+            };
+            document.getElementById('close-category-modal-btn').onclick = handleCloseCategoryModal;
+
+            const searchInput = document.getElementById('category-modal-search');
+            searchInput.oninput = (e) => {
+                state.categorySearchTerm = e.target.value;
+                renderCategoryList(); // Re-render the list only
+            };
+            
+            // Focus the search input automatically
+            setTimeout(() => searchInput.focus(), 50);
+
+            renderCategoryList();
+        }
+
+        // NEW: Helper function to render just the list inside the category modal
+        function renderCategoryList() {
+            const listEl = document.getElementById('category-modal-list');
+            if (!listEl) return;
+
+            listEl.innerHTML = '';
+            const searchTerm = state.categorySearchTerm.toLowerCase();
+            const filteredCategories = state.categories.filter(cat => 
+                cat.toLowerCase().includes(searchTerm)
+            );
+
+            if (filteredCategories.length === 0) {
+                listEl.innerHTML = `<li class="p-3 text-center text-gray-500">No categories found.</li>`;
+                return;
+            }
+
+            filteredCategories.forEach(category => {
+                const isActive = category === state.selectedCategory;
+                const li = document.createElement('li');
+                li.textContent = category;
+                li.className = `
+                    p-3 text-sm font-medium rounded-lg cursor-pointer transition-all
+                    ${isActive
+                        ? 'bg-blue-600 text-white'
+                        : 'text-gray-700 hover:bg-gray-100'
+                    }
+                `;
+                li.onclick = () => handleCategorySelect(category);
+                listEl.appendChild(li);
+            });
+        }
+
         async function renderPatientHandoutModal(drug) {
              const modalHTML = `
-                <div id="handout-modal" class="modal-backdrop fixed inset-0 bg-gray-900 bg-opacity-80 flex items-center justify-center p-4">
+                <div id="handout-modal" class="modal-backdrop fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center p-4">
                     <div class="modal-content bg-white rounded-xl shadow-2xl w-full max-w-2xl p-6 relative text-gray-800 max-h-[90vh] overflow-y-auto">
                         <h2 class="text-2xl font-bold text-teal-600 mb-4 border-b pb-2">
                             Patient Handout: <span id="handout-drug-name">${drug.name}</span>
@@ -751,6 +829,7 @@
              `;
              dom.modalContainer.innerHTML = modalHTML;
              
+             // FIX: Corrected the mangled if(lucide) block
              if (typeof lucide !== 'undefined') {
                 lucide.createIcons();
              } else {
@@ -785,6 +864,7 @@
         }
 
         // --- MODAL CONTROL ---
+        // FIX: Corrected and de-duplicated this entire section
         function closeFormModal() {
             state.isFormOpen = false;
             state.currentEditDrug = null;
@@ -793,6 +873,12 @@
         
         function closeAnalysisModal() {
             state.analysisDrug = null;
+            fullRender();
+        }
+
+        // NEW: Close category modal
+        function handleCloseCategoryModal() {
+            state.isCategoryModalOpen = false;
             fullRender();
         }
 
@@ -826,45 +912,58 @@
             state.patientHandoutDrug = null;
             state.confirmDeleteSelected = false; // NEW
             state.isBulkImportOpen = false; // NEW
+            state.isCategoryModalOpen = false; // NEW
             state.isFormOpen = true;
             fullRender();
         }
         
-        // NEW: Handler to open bulk import modal
-        function handleOpenBulkImport() {
-            state.currentEditDrug = null;
+         // NEW: Handler to open bulk import modal
+         function handleOpenBulkImport() {
+             state.currentEditDrug = null;
+             state.selectedDrugCode = null;
+             state.analysisDrug = null;
+             state.patientHandoutDrug = null;
+             state.confirmDeleteSelected = false;
+             state.isCategoryModalOpen = false; // NEW
+             state.isFormOpen = false;
+             state.isBulkImportOpen = true;
+             fullRender();
+         }
+
+        // NEW: Handler to open the category modal
+        function handleOpenCategoryModal() {
+            state.isCategoryModalOpen = true;
+            state.categorySearchTerm = '';
+            fullRender();
+        }
+
+        // NEW: Handler for when a category is selected from the modal
+        function handleCategorySelect(category) {
+            state.selectedCategory = category;
             state.selectedDrugCode = null;
+            state.confirmDeleteCode = null;
             state.analysisDrug = null;
             state.patientHandoutDrug = null;
             state.confirmDeleteSelected = false;
-            state.isFormOpen = false;
-            state.isBulkImportOpen = true;
-            fullRender();
+            state.isBulkImportOpen = false;
+            handleCloseCategoryModal(); // This will trigger fullRender
         }
-        
+         
         // --- DATA & EVENT HANDLERS ---
         function findDrug(code) {
             return state.drugs.find(d => d.code === code);
         }
-        
+
         function getFilteredDrugs() {
-            let currentDrugs = state.drugs;
-
-            if (state.selectedCategory !== 'All') {
-                currentDrugs = currentDrugs.filter(drug => drug.category === state.selectedCategory);
-            }
-
-            // ROBUST SEARCH FIX: Handle null/undefined and trim
-            const searchTerm = String(state.searchTerm || '').trim().toLowerCase();
-            if (searchTerm) {
-                currentDrugs = currentDrugs.filter(drug =>
-                    (drug.name || '').toLowerCase().includes(searchTerm) ||
-                    (drug.code || '').toLowerCase().includes(searchTerm) ||
-                    (drug.remarks || '').toLowerCase().includes(searchTerm)
-                );
-            }
-
-            return currentDrugs.sort((a, b) => a.code.localeCompare(b.code));
+            return state.drugs.filter(drug => {
+                const s = state.searchTerm.toLowerCase();
+                const matchesSearch = s === '' ||
+                    drug.name.toLowerCase().includes(s) ||
+                    drug.code.toLowerCase().includes(s) ||
+                    drug.remarks.toLowerCase().includes(s);
+                const matchesCategory = state.selectedCategory === 'All' || drug.category === state.selectedCategory;
+                return matchesSearch && matchesCategory;
+            });
         }
         
         function handleDrugSelect(drug) {
@@ -875,6 +974,7 @@
             state.patientHandoutDrug = null;
             state.confirmDeleteSelected = false; // NEW
             state.isBulkImportOpen = false; // NEW
+            state.isCategoryModalOpen = false; // NEW
             fullRender();
         }
         
@@ -1552,6 +1652,7 @@
             dom.ocrUploadInput.onchange = handleOCRUpload;
             dom.addNewDrugBtn.onclick = handleOpenAdd;
             dom.bulkImportBtn.onclick = handleOpenBulkImport; // NEW
+            dom.categoryFilterTrigger.onclick = handleOpenCategoryModal; // NEW
         };
 
     </script>
