@@ -212,7 +212,7 @@
         // --- GLOBAL STATE & CONSTANTS ---
         const LOCAL_STORAGE_KEY = 'gitDrugReferenceDataV2';
         
-        const apikey = "AIzaSyDnEXbl4H664dLyY6SXlRH4IFwHX0EdVew"; 
+        const apikey = "AIzaSyBnxyoQ6tXynHpRysmYUF8mAuj5DPXyK4E"; 
         const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apikey}`;
 
         const INITIAL_DRUGS = [
@@ -604,57 +604,76 @@
         }
         
         // NEW: Modal for bulk text import
-        // MODIFIED: Updated for CSV import
-        // FIX: Replaced entire broken function with the correct version
+        // MODIFIED: Updated to support JSON file upload AND CSV text paste
         function renderBulkImportModal() {
-            // MODIFIED: Changed example to CSV format
+            // JSON Example for File Upload
+            const exampleJSON = `[
+  {
+    "code": "01.99.01",
+    "name": "New Drug A",
+    "form": "Capsule",
+    "remarks": "Take with water.",
+    "category": "New Category"
+  },
+  {
+    "code": "01.99.02",
+    "name": "New Drug B",
+    "form": "Syrup",
+    "remarks": "Shake well.",
+    "category": "New Category"
+  }
+]`;
+
+            // CSV Example for Text Paste
             const exampleCSV = `code,name,form,remarks,category
 "01.99.01","New Drug A","Capsule","Take with water.","New Category"
 "01.99.02","New Drug B","Syrup","Shake well.","New Category"
 `;
+
             const modalHTML = `
                 <div id="bulk-import-modal" class="modal-backdrop fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center p-4">
                     <div class="modal-content bg-white rounded-xl shadow-2xl w-full max-w-2xl p-6 relative">
-                        <!-- MODIFIED: Title -->
-                        <h2 class="text-2xl font-bold text-gray-800 mb-4">Bulk CSV Import</h2>
+                        <h2 class="text-2xl font-bold text-gray-800 mb-4">Bulk Data Import</h2>
                         <button id="close-bulk-import-modal-btn" class="absolute top-4 right-4 p-2 text-gray-500 hover:text-gray-900 rounded-full">
                             <i data-lucide="x" class="w-5 h-5"></i>
                         </button>
                         
-                        <!-- MODIFIED: Instructions -->
-                        <p class="text-sm text-gray-600 mb-2">
-                            Upload a CSV file containing drug data. The first row **must** be a header with column names like: <code>code</code>, <code>name</code>, <code>form</code>, <code>remarks</code>, <code>category</code>.
+                        <p class="text-sm text-gray-600 mb-4">
+                            Import data by uploading a <strong>JSON file</strong> or pasting <strong>CSV text</strong>.
                         </p>
-                        <p class="text-sm text-gray-600 mb-2"><strong>Required columns:</strong> <code>code</code>, <code>name</code>. Others are optional. Column order does not matter.</p>
                         
-                        <div class="mb-4 bg-gray-800 text-white p-3 rounded-lg max-h-32 overflow-y-auto">
-                            <!-- MODIFIED: Example text -->
-                            <p class="text-sm font-medium mb-1 text-gray-300">Example Format (file.csv):</p>
-                            <pre class="text-xs"><code>${exampleCSV}</code></pre>
-                        </div>
-                        
-                        <!-- MODIFIED: Wrapped file input in a div for toggling -->
+                        <!-- FILE UPLOAD UI (JSON) -->
                         <div id="bulk-import-file-ui">
-                            <label class="block w-full px-4 py-6 border-2 border-dashed border-gray-300 rounded-lg text-center cursor-pointer hover:border-blue-500 hover:bg-gray-50 transition">
-                                <input type="file" id="bulk-import-file-input" accept=".csv,text/csv" class="hidden" />
+                            <div class="mb-4 bg-gray-800 text-white p-3 rounded-lg max-h-32 overflow-y-auto">
+                                <p class="text-sm font-medium mb-1 text-gray-300">Example Format (file.json):</p>
+                                <pre class="text-xs"><code>${exampleJSON}</code></pre>
+                            </div>
+
+                            <label id="bulk-import-dropzone" class="block w-full px-4 py-6 border-2 border-dashed border-gray-300 rounded-lg text-center cursor-pointer hover:border-blue-500 hover:bg-gray-50 transition">
+                                <input type="file" id="bulk-import-file-input" accept=".json,application/json" class="hidden" />
                                 <i data-lucide="upload-cloud" class="w-8 h-8 mx-auto text-gray-500"></i>
-                                <span id="bulk-import-filename" class="mt-2 text-sm font-medium text-gray-700">Click to upload a .csv file</span>
+                                <span id="bulk-import-filename" class="mt-2 text-sm font-medium text-gray-700">Click or Drag to upload a .json file</span>
                                 <span id="bulk-import-file-info" class="mt-1 text-xs text-gray-500"></span>
                             </label>
                             <p class="text-center text-sm my-2">
-                                <button id="toggle-to-text-btn" class="text-blue-600 hover:underline font-medium">Or paste CSV data instead?</button>
+                                <button id="toggle-to-text-btn" class="text-blue-600 hover:underline font-medium">Or paste CSV text instead?</button>
                             </p>
                         </div>
                         
-                        <!-- NEW: Added hidden text area for free text input -->
+                        <!-- TEXT PASTE UI (CSV) -->
                         <div id="bulk-import-text-ui" class="hidden">
+                            <div class="mb-4 bg-gray-800 text-white p-3 rounded-lg max-h-32 overflow-y-auto">
+                                <p class="text-sm font-medium mb-1 text-gray-300">Example Format (CSV Text):</p>
+                                <pre class="text-xs"><code>${exampleCSV}</code></pre>
+                            </div>
+
                             <textarea
                                 id="bulk-import-text"
                                 class="w-full h-48 p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 font-mono text-sm"
-                                placeholder="Paste your CSV data here (including header row)..."
+                                placeholder="Paste your CSV data here (header row required)..."
                             ></textarea>
                             <p class="text-center text-sm my-2">
-                                <button id="toggle-to-file-btn" class="text-blue-600 hover:underline font-medium">Or upload a .csv file instead?</button>
+                                <button id="toggle-to-file-btn" class="text-blue-600 hover:underline font-medium">Or upload a .json file instead?</button>
                             </p>
                         </div>
 
@@ -681,17 +700,59 @@
             document.getElementById('close-bulk-import-modal-btn').onclick = closeBulkImportModal;
             document.getElementById('bulk-import-submit-btn').onclick = handleBulkImportSubmit;
 
-            document.getElementById('bulk-import-file-input').onchange = (e) => {
-                const file = e.target.files[0];
+            const fileInput = document.getElementById('bulk-import-file-input');
+            const dropZone = document.getElementById('bulk-import-dropzone');
+            const fileNameDisplay = document.getElementById('bulk-import-filename');
+            const fileInfoDisplay = document.getElementById('bulk-import-file-info');
+
+            // Helper to update UI
+            const updateFileUI = (file) => {
                 if (file) {
-                    document.getElementById('bulk-import-filename').textContent = file.name;
-                    document.getElementById('bulk-import-file-info').textContent = `(${(file.size / 1024).toFixed(1)} KB)`;
+                    fileNameDisplay.textContent = file.name;
+                    fileInfoDisplay.textContent = `(${(file.size / 1024).toFixed(1)} KB)`;
                 } else {
-                    // MODIFIED: Updated placeholder text
-                    document.getElementById('bulk-import-filename').textContent = 'Click to upload a .csv file';
-                    document.getElementById('bulk-import-file-info').textContent = '';
+                    fileNameDisplay.textContent = 'Click or Drag to upload a .json file';
+                    fileInfoDisplay.textContent = '';
                 }
             };
+
+            // Manual Selection Handler
+            fileInput.onchange = (e) => {
+                updateFileUI(e.target.files[0]);
+            };
+
+            // Drag and Drop Handlers
+            ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+                dropZone.addEventListener(eventName, (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                }, false);
+            });
+
+            ['dragenter', 'dragover'].forEach(eventName => {
+                dropZone.addEventListener(eventName, () => {
+                    dropZone.classList.add('border-blue-500', 'bg-blue-50');
+                    dropZone.classList.remove('border-gray-300');
+                }, false);
+            });
+
+            ['dragleave', 'drop'].forEach(eventName => {
+                dropZone.addEventListener(eventName, () => {
+                    dropZone.classList.remove('border-blue-500', 'bg-blue-50');
+                    dropZone.classList.add('border-gray-300');
+                }, false);
+            });
+
+            dropZone.addEventListener('drop', (e) => {
+                const dt = e.dataTransfer;
+                const files = dt.files;
+                
+                if (files && files.length > 0) {
+                    // Assign dropped files to the input element
+                    fileInput.files = files;
+                    updateFileUI(files[0]);
+                }
+            }, false);
 
             // NEW: Add listeners for toggling between file and text input
             document.getElementById('toggle-to-text-btn').onclick = (e) => {
@@ -1106,7 +1167,7 @@
         }
         
         // NEW: Handler for bulk import submission
-        // MODIFIED: Refactored to handle both file and text input
+        // MODIFIED: Logic split to handle JSON file vs CSV Text
         async function handleBulkImportSubmit() {
             const fileInput = document.getElementById('bulk-import-file-input');
             const textInput = document.getElementById('bulk-import-text');
@@ -1115,69 +1176,67 @@
             const file = fileInput.files[0];
             const textFromArea = textInput.value.trim();
             
-            let textToParse = '';
             let source = '';
+            let importedData = null;
 
-            // Check if text area is visible and has content
-            if (!textUI.classList.contains('hidden') && textFromArea) {
-                textToParse = textFromArea;
-                source = 'text area';
-            } 
-            // Else, check if file input has a file
-            else if (file) {
-                if (!file.type.includes('csv') && !file.name.endsWith('.csv')) {
-                    showMessage("Import failed: File must be a .csv file.");
-                    return;
-                }
-                try {
-                    textToParse = await readFileAsText(file);
-                    source = 'file';
-                } catch (readError) {
-                    showMessage(`Error reading file: ${readError.message}`);
-                    return;
-                }
-            } 
-            // Else, no input provided
-            else {
-                showMessage("Please select a file or paste CSV text.");
-                return;
-            }
-
-            if (!textToParse) {
-                showMessage("No data to import.");
-                return;
-            }
-
-            // --- Start Parsing and Processing ---
             try {
-                let importedData;
-                try {
-                    // MODIFIED: Call new CSV parser
-                    importedData = parseCSV(textToParse);
-                } catch (e) {
-                    // MODIFIED: Updated error message
-                    showMessage(`Import failed: Could not parse CSV from ${source}. ${e.message}`);
-                    return;
+                // 1. Handle Text Area (CSV)
+                if (!textUI.classList.contains('hidden')) {
+                    if (!textFromArea) {
+                        showMessage("Please paste CSV data into the text box.");
+                        return;
+                    }
+                    try {
+                        importedData = parseCSV(textFromArea);
+                        source = 'CSV Text';
+                    } catch (e) {
+                        showMessage(`CSV Parse Error: ${e.message}`);
+                        return;
+                    }
+                } 
+                // 2. Handle File Upload (JSON)
+                else {
+                    if (!file) {
+                        showMessage("Please select a JSON file to upload.");
+                        return;
+                    }
+                    if (!file.type.includes('json') && !file.name.toLowerCase().endsWith('.json')) {
+                        showMessage("Import failed: Selected file must be a .json file.");
+                        return;
+                    }
+                    
+                    try {
+                        const fileText = await readFileAsText(file);
+                        importedData = JSON.parse(fileText);
+                        source = 'JSON File';
+                        
+                        if (!Array.isArray(importedData)) {
+                            showMessage("JSON Import Error: Root element must be an array [].");
+                            return;
+                        }
+                    } catch (e) {
+                        showMessage(`JSON Parse Error: ${e.message}`);
+                        return;
+                    }
                 }
-                
-                // processImportedData expects an array and returns stats object or null
+
+                // 3. Process the parsed data (common for both)
                 const stats = processImportedData(importedData);
                 
                 if (stats) {
                     if (stats.newDrugs > 0 || stats.updatedDrugs > 0) {
-                        showMessage(`Bulk import from ${source} successful! Added ${stats.newDrugs} new drugs and updated ${stats.updatedDrugs} existing entries.`);
+                        showMessage(`Import from ${source} successful! Added ${stats.newDrugs} new, Updated ${stats.updatedDrugs}.`);
                     } else {
-                        showMessage(`Import from ${source} complete. No new or updated drugs found.`);
+                        showMessage(`Import from ${source} complete. No changes made.`);
                     }
                     closeBulkImportModal();
-                    saveState(); // This will trigger fullRender
+                    saveState(); 
                 } else {
-                    // This fixes the old "JSON array" bug.
-                    showMessage(`Import from ${source} failed: The CSV data could not be processed.`);
+                    showMessage(`Import from ${source} failed: Invalid data structure.`);
                 }
 
-            } catch (error) { // Catch any unexpected errors
-                showMessage(`An unexpected error occurred during import: ${error.message}`);
+            } catch (error) {
+                showMessage(`An unexpected error occurred: ${error.message}`);
             }
         }
 
