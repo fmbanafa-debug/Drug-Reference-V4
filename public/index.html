@@ -212,7 +212,7 @@
         // --- GLOBAL STATE & CONSTANTS ---
         const LOCAL_STORAGE_KEY = 'gitDrugReferenceDataV2';
         
-        const apikey = "AIzaSyBnxyoQ6tXynHpRysmYUF8mAuj5DPXyK4E"; 
+        const apikey = ""; 
         const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apikey}`;
 
         const INITIAL_DRUGS = [
@@ -1392,6 +1392,12 @@
                     }
                 };
 
+                try {
+                        const response = await fetch('/api/generate', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(payload)
+                        });
                 const responseJson = await callGeminiApi(payload);
                 
                 // FIX: Check if modal is still active before updating DOM
@@ -1486,6 +1492,12 @@
                     }
                 };
 
+                try {
+                        const response = await fetch('/api/generate', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(payload)
+                        });
                 const responseJson = await callGeminiApi(payload);
                 
                 // FIX: Check if modal is still active before updating DOM
@@ -1584,6 +1596,12 @@
                     }
                 };
 
+                try {
+                        const response = await fetch('/api/generate', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(payload)
+                        });
                 const responseJson = await callGeminiApi(payload);
                 const resultText = responseJson?.candidates?.[0]?.content?.parts?.[0]?.text;
                 
@@ -1662,7 +1680,7 @@
 
             for (let i = 0; i < maxRetries; i++) {
                 try {
-                    const response = await fetch(API_URL, {
+                    const response = await fetch('/api/generate', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify(payload)
