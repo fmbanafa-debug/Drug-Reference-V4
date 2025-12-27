@@ -1398,7 +1398,7 @@
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify(payload)
                         });
-                const responseJson = await callGeminiApi(payload);
+                const responseJson = await callVercelBackend(payload);
                 
                 // FIX: Check if modal is still active before updating DOM
                 if (!state.analysisDrug || state.analysisDrug.code !== drug.code) {
@@ -1498,7 +1498,7 @@
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify(payload)
                         });
-                const responseJson = await callGeminiApi(payload);
+                const responseJson = await callVercelBackend(payload);
                 
                 // FIX: Check if modal is still active before updating DOM
                 if (!state.patientHandoutDrug || state.patientHandoutDrug.code !== drug.code) {
@@ -1602,7 +1602,7 @@
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify(payload)
                         });
-                const responseJson = await callGeminiApi(payload);
+                const responseJson = await callVercelBackend(payload);
                 const resultText = responseJson?.candidates?.[0]?.content?.parts?.[0]?.text;
                 
                 if (!resultText) {
@@ -1674,7 +1674,7 @@
             return { newDrugs, updatedDrugs };
         }
         
-        async function callGeminiApi(payload) {
+        async function callVercelBackend(payload) {
              const maxRetries = 3;
              let lastError = null;
 
