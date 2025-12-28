@@ -216,7 +216,9 @@
         const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apikey}`;
 
         const INITIAL_DRUGS = [
-          { code: '01.01.01', name: 'Aluminium/Magnesium Hydroxide', form: 'Tablets', remarks: 'Also used in some vaccines. Used to control phosphate in kidney failure.', category: 'Antacid' },
+          { 
+              code: '01.01.01', name: 'Aluminium/Magnesium Hydroxide', form: 'Tablets', remarks: 'Also used in some vaccines. Used to control phosphate in kidney failure.', category: 'Antacid' 
+          },
           { code: '01.01.02', name: 'Aluminium/Magnesium Hydroxide', form: 'Suspension', remarks: '180ml/bottle. Used to control phosphate in kidney failure.', category: 'Antacid' },
           { code: '01.02.01', name: 'Hyoscine Butylbromide', form: 'Tablets', remarks: '10mg/tab. Prevents cramps & Blurred vision. Peripheral anticholinergic.', category: 'Antispasmodic' },
           { code: '01.02.02', name: 'Hyoscine Butylbromide', form: 'Suppository', remarks: '10mg/supp', category: 'Antispasmodic' },
