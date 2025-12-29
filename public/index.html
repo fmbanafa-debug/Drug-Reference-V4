@@ -41,10 +41,10 @@
         <header class="mb-8">
             <h1 class="text-3xl sm:text-4xl font-extrabold text-gray-900 flex items-center">
                 <i data-lucide="flask-conical" class="w-8 h-8 mr-3 text-blue-600"></i>
-                Interactive Drug Reference (Banafa's Tool)
+                Interactive GIT Drug Reference (Local Data)
             </h1>
             <p class="mt-2 text-lg text-gray-500">
-                Searchable reference with local data persistence, CSV export, and **Safety Analysis**. Total Drugs: <span id="drug-count">0</span>
+                Searchable reference with local data persistence, CSV export, and **Gemini Safety Analysis**. Total Drugs: <span id="drug-count">0</span>
             </p>
         </header>
 
@@ -212,13 +212,13 @@
         // --- GLOBAL STATE & CONSTANTS ---
         const LOCAL_STORAGE_KEY = 'gitDrugReferenceDataV2';
         
-        const apikey = ""; 
-        const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apikey}`;
+        // --- API CONFIGURATION ---
+        // REMOVED: const apikey and API_URL are no longer needed here as we use the backend proxy.
+        // const apikey = ""; 
+        // const API_URL = `...`;
 
         const INITIAL_DRUGS = [
-          { 
-              code: '01.01.01', name: 'Aluminium/Magnesium Hydroxide', form: 'Tablets', remarks: 'Also used in some vaccines. Used to control phosphate in kidney failure.', category: 'Antacid' 
-          },
+          { code: '01.01.01', name: 'Aluminium/Magnesium Hydroxide', form: 'Tablets', remarks: 'Also used in some vaccines. Used to control phosphate in kidney failure.', category: 'Antacid' },
           { code: '01.01.02', name: 'Aluminium/Magnesium Hydroxide', form: 'Suspension', remarks: '180ml/bottle. Used to control phosphate in kidney failure.', category: 'Antacid' },
           { code: '01.02.01', name: 'Hyoscine Butylbromide', form: 'Tablets', remarks: '10mg/tab. Prevents cramps & Blurred vision. Peripheral anticholinergic.', category: 'Antispasmodic' },
           { code: '01.02.02', name: 'Hyoscine Butylbromide', form: 'Suppository', remarks: '10mg/supp', category: 'Antispasmodic' },
@@ -1292,62 +1292,6 @@
 
         // --- GEMINI API FUNCTIONS ---
 
-        
-        // 1. Simplified API caller that only talks to your Vercel Backend
-async function callVercelBackend(payload) {
-    const response = await fetch('/api/generate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-    });
-
-    if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || `Server Error: ${response.status}`);
-    }
-    return await response.json();
-}
-
-// 2. Updated OCR Handler
-async function handleOCRUpload(event) {
-    const file = event.target.files[0];
-    [span_12](start_span)if (!file) return;[span_12](end_span)
-
-    [span_13](start_span)setOCRLoading(true);[span_13](end_span)
-    
-    try {
-        [span_14](start_span)[span_15](start_span)const base64Data = await base64EncodeFile(file);[span_14](end_span)[span_15](end_span)
-        [span_16](start_span)const userQuery = "Extract all drug entries into a JSON array...";[span_16](end_span)
-        const payload = {
-            contents: [{
-                parts: [
-                    { text: userQuery },
-                    { inlineData: { mimeType: file.type, data: base64Data } }
-                ]
-            }],
-            [span_17](start_span)[span_18](start_span)// Use the system prompt and config already in your code[span_17](end_span)[span_18](end_span)
-        };
-
-        const responseJson = await callVercelBackend(payload);
-        const resultText = responseJson?.candidates?.[0]?.content?.parts?.[0]?.text;
-        
-        [span_19](start_span)if (!resultText) throw new Error('OCR failed to return text.');[span_19](end_span)
-
-        [span_20](start_span)const importedData = JSON.parse(resultText);[span_20](end_span)
-        [span_21](start_span)const stats = processImportedData(importedData);[span_21](end_span)
-        
-        if (stats) {
-            [span_22](start_span)showMessage(`Success! Added ${stats.newDrugs}, Updated ${stats.updatedDrugs}.`);[span_22](end_span)
-            [span_23](start_span)saveState();[span_23](end_span)
-        }
-    } catch (error) {
-        [span_24](start_span)showMessage(`OCR failed: ${error.message}`);[span_24](end_span)
-    } finally {
-        [span_25](start_span)setOCRLoading(false);[span_25](end_span)
-        [span_26](start_span)event.target.value = null;[span_26](end_span)
-    }
-}
-
         function base64EncodeFile(file) {
             return new Promise((resolve, reject) => {
                 const reader = new FileReader();
@@ -1450,8 +1394,7 @@ async function handleOCRUpload(event) {
                     }
                 };
 
-                
-                const responseJson = await callVercelBackend(payload);
+                const responseJson = await callGeminiApi(payload);
                 
                 // FIX: Check if modal is still active before updating DOM
                 if (!state.analysisDrug || state.analysisDrug.code !== drug.code) {
@@ -1545,13 +1488,7 @@ async function handleOCRUpload(event) {
                     }
                 };
 
-                try {
-                        const response = await fetch('/api/generate', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify(payload)
-                        });
-                const responseJson = await callVercelBackend(payload);
+                const responseJson = await callGeminiApi(payload);
                 
                 // FIX: Check if modal is still active before updating DOM
                 if (!state.patientHandoutDrug || state.patientHandoutDrug.code !== drug.code) {
@@ -1649,13 +1586,7 @@ async function handleOCRUpload(event) {
                     }
                 };
 
-                try {
-                        const response = await fetch('/api/generate', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify(payload)
-                        });
-                const responseJson = await callVercelBackend(payload);
+                const responseJson = await callGeminiApi(payload);
                 const resultText = responseJson?.candidates?.[0]?.content?.parts?.[0]?.text;
                 
                 if (!resultText) {
@@ -1727,12 +1658,13 @@ async function handleOCRUpload(event) {
             return { newDrugs, updatedDrugs };
         }
         
-        async function callVercelBackend(payload) {
+        async function callGeminiApi(payload) {
              const maxRetries = 3;
              let lastError = null;
 
             for (let i = 0; i < maxRetries; i++) {
                 try {
+                    // MODIFIED: Switched to local Vercel endpoint
                     const response = await fetch('/api/generate', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
@@ -1835,3 +1767,5 @@ async function handleOCRUpload(event) {
     </script>
 </body>
 </html>
+
+
