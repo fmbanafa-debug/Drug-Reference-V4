@@ -21,7 +21,7 @@ export default async function handler(request, response) {
         const genAI = new GoogleGenerativeAI(apiKey);
         
         // Use flash model (you can change this to 'gemini-1.5-pro' if needed)
-        const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+        const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
 
         // 5. Generate Content
         // We pass the "contents" and "generationConfig" exactly as the frontend prepared them
